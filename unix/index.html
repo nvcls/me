@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>nvcls — Unix</title>
+
+  <!-- chrono-node (browser build) from jsDelivr -->
+  <script src="https://cdn.jsdelivr.net/npm/chrono-node/dist/chrono.min.js"></script>
+
+  <style>
+    :root{
+      --bg: #ffffff;
+      --fg: #111111;
+      --muted: #666666;
+      --border: #e9e9e9;
+      --radius: 12px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+
+    /* page */
+    body{
+      margin:0;
+      padding:40px;
+      display:flex;
+      justify-content:center;
+      background: linear-gradient(180deg,#fbfdff 0%, #f4f7fb 100%);
+      color:var(--fg);
+    }
+
+    .container{
+      width:100%;
+      max-width:760px;
+      background:#fff;
+      border-radius:18px;
+      padding:26px;
+      box-shadow: 0 12px 40px rgba(16,24,40,0.08);
+      border:1px solid var(--border);
+      transform: translateY(8px);
+      animation: rise .45s ease forwards;
+    }
+
+    @keyframes rise {
+      from { opacity:0; transform: translateY(14px); }
+      to { opacity:1; transform: translateY(0); }
+    }
+
+    header{
+      display:flex;
+      gap:16px;
+      align-items:center;
+    }
+
+    h1{
+      margin:0;
+      font-size:20px;
+      font-weight:600;
+    }
+
+    .muted{ color:var(--muted); font-size:13px; }
+
+    .input {
+      margin-top:18px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+    }
+
+    .text {
+      flex:1;
+      padding:12px 14px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      font-size:15px;
+      outline:none;
+      transition:box-shadow .12s, border-color .12s;
+    }
+    .text:focus{
+      box-shadow: 0 6px 18px rgba(16,24,40,0.06);
+      border-color:#cfd9ff;
+    }
+
+    .btn {
+      padding:10px 14px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#fbfbff;
+      cursor:pointer;
+      font-weight:600;
+      transition:transform .12s ease, box-shadow .12s;
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn-primary{
+      background: linear-gradient(180deg,#eef4ff,#e7f0ff);
+      border-color:#cadeff;
+    }
+
+    .section-title{
+      margin:20px 0 10px;
+      font-size:15px;
+      font-weight:600;
+    }
+
+    .results{
+      display:grid;
+      gap:10px;
+    }
+
+    .row{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      padding:12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:linear-gradient(180deg,#ffffff,#fbfbff);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+    }
+
+    .row .left{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      min-width:0;
+    }
+
+    .tag{
+      font-size:14px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
+    .preview{
+      font-size:13px;
+      color:var(--muted);
+      white-space:nowrap;
+      text-overflow:ellipsis;
+      overflow:hidden;
+      max-width:36ch;
+    }
+
+    .copy{
+      min-width:84px;
+      padding:8px 10px;
+      border-radius:10px;
+      border:1px solid var(--border);
+      background:#fff;
+      cursor:pointer;
+    }
+
+    .copy.copied{
+      background:linear-gradient(180deg,#e8fff0,#daffe6);
+      border-color:#bff2c9;
+    }
+
+    .note{ margin-top:12px; color:var(--muted); font-size:13px; }
+
+    /* responsive */
+    @media (max-width:640px){
+      .preview{ max-width:18ch; }
+      .copy{ min-width:64px; padding:6px 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="card">
+    <header>
+      <div>
+        <h1>Discord Timestamp Portal</h1>
+        <div class="muted">Enter any natural language time — it uses your local timezone automatically.</div>
+      </div>
+    </header>
+
+    <div class="input">
+      <input id="input" class="text" placeholder="e.g. in 5 mins, tomorrow at 5pm, next fri 3am, +3h, now+1h, jan 12 2025 16:30">
+      <button id="nowBtn" class="btn">Now</button>
+      <button id="goBtn" class="btn btn-primary">Convert</button>
+    </div>
+
+    <div class="section-title">Results</div>
+    <div id="results" class="results">
+      <div class="muted note">Enter a time and press Convert (or hit Enter). Click Copy to copy the Discord format.</div>
+    </div>
+  </div>
+
+<script>
+/*
+  Browser implementation:
+  - chrono-node for parsing (loads from CDN)
+  - normalization layer for shorthand
+  - outputs all Discord formats with localized preview + relative preview
+*/
+
+// Utility: normalize shorthand / common slang into chrono-friendly phrases
+function normalizeInput(s) {
+  if (!s || !s.trim()) return s;
+  let t = s.trim();
+
+  // unify unicode +, remove weird commas
+  t = t.replace(/\u2212/g, '-').replace(/,/g, ' ').trim();
+
+  // lower for matching, but keep original for chrono (chrono is case-insensitive)
+  const low = t.toLowerCase();
+
+  // quick common shorthand replacements
+  const map = {
+    "\\btmr\\b": "tomorrow",
+    "\\btomm?orow\\b": "tomorrow",
+    "\\btonite\\b": "tonight",
+    "\\bnxt\\b": "next",
+    "\\bmins\\b": "minutes",
+    "\\bmin\\b": "minutes",
+    "\\bmins?\\b": "minutes",
+    "\\bhrs\\b": "hours",
+    "\\bhr\\b": "hour",
+    "\\bpm\\.?\\b": "pm",
+    "\\bam\\.?\\b": "am",
+    "\\bnoon\\b": "12:00 pm",
+    "\\bmidnight\\b": "12:00 am",
+    // small textual fixes
+    "\\bin a few minutes\\b": "in 5 minutes"
+  };
+  for (const k in map) {
+    t = t.replace(new RegExp(k, "ig"), map[k]);
+  }
+
+  // +3h, +2h30m, +30m, +1d  => convert to "in X hours/minutes/days"
+  // handle patterns like "+2h30m", "+2h 30m"
+  let plusMatch = t.match(/^\+?\s*([+-]?\d+)(?:\s*h(?:ours?)?)?(?:\s*[:h]\s*(\d+)\s*m(?:in(?:utes?)?)?)?\s*$/i);
+  // The above is too narrow; we'll handle multiple patterns below.
+
+  // pattern: +3h or +3h30m or now+1h etc.
+  // Replace occurrences like "now+1h", "now+ 2h", "now +2h" => "in 1 hour" relative to now
+  t = t.replace(/\bnow\s*\+\s*(\d+)\s*h\b/ig, "in $1 hours");
+  t = t.replace(/\bnow\s*\+\s*(\d+)\s*m\b/ig, "in $1 minutes");
+  t = t.replace(/\bnow\s*\+\s*(\d+)\s*d\b/ig, "in $1 days");
+
+  // standalone "+3h", "+30m", "+1d" at start or whole string
+  t = t.replace(/^\+(\d+)\s*h(?:ours?)?$/i, "in $1 hours");
+  t = t.replace(/^\+(\d+)\s*m(?:in(?:utes?)?)?$/i, "in $1 minutes");
+  t = t.replace(/^\+(\d+)\s*d(?:ays?)?$/i, "in $1 days");
+
+  // combine +2h30m or 2h30m -> in 2 hours 30 minutes
+  t = t.replace(/^\+?(\d+)\s*h(?:ours?)?\s*(?:[:\s]\s*(\d+)\s*m(?:in(?:utes?)?)?)?$/i, (m, h, m2) => {
+    if (!m2) return `in ${h} hours`;
+    return `in ${h} hours ${m2} minutes`;
+  });
+  t = t.replace(/^\+?(\d+)\s*m(?:in(?:utes?)?)?$/i, (m, mm) => `in ${mm} minutes`);
+
+  // allow "in2h", "in2h30m"
+  t = t.replace(/\bin(\d+)h(\d+)m\b/ig, "in $1 hours $2 minutes");
+  t = t.replace(/\bin(\d+)h\b/ig, "in $1 hours");
+  t = t.replace(/\bin(\d+)m\b/ig, "in $1 minutes");
+
+  // fix "tonight 11" -> "tonight at 11pm" (assume pm if 7-11 etc)
+  t = t.replace(/\btonight\s+(\d{1,2})(?:\:(\d{2}))?\b/i, (m, h, mm) => {
+    h = parseInt(h,10);
+    // if small like 0-6, probably AM (rare) — default to PM for 7-11 and typical use-cases
+    if (h >= 0 && h <= 6) return `tonight at ${String(h).padStart(2,'0')}:${mm || '00'}`;
+    if (h >= 7 && h <= 23) {
+      // if user wrote 11 -> assume 11pm for "tonight"
+      return `tonight at ${String(h).padStart(2,'0')}:${mm || '00'}`;
+    }
+    return `tonight at ${String(h).padStart(2,'0')}:${mm || '00'}`;
+  });
+
+  // "5pm bst" -> keep timezone token, chrono may understand some tzs; we prefer to keep raw
+  // final trim
+  return t.trim();
+}
+
+// parse function using chrono then fallback to Date.parse
+function parseToDate(input) {
+  const normalized = normalizeInput(input);
+  // first try chrono with forward date bias (future-preference when ambiguous)
+  try {
+    // chrono.parseDate returns Date or null
+    const chronoDate = chrono.parseDate(normalized, new Date(), { forwardDate: true });
+    if (chronoDate && !isNaN(chronoDate.getTime())) {
+      return { date: chronoDate, used: 'chrono' };
+    }
+  } catch(e) {
+    // swallow and try fallback
+    console.warn('chrono error', e);
+  }
+
+  // try Date.parse (ISO-like or other JS-parseable strings)
+  const fallback = new Date(normalized);
+  if (!isNaN(fallback.getTime())) {
+    return { date: fallback, used: 'native' };
+  }
+
+  // try relative manual parse for patterns like "in 5 mins" (chrono usually covers this, but keep safe)
+  const rel = parseManualRelative(normalized);
+  if (rel) return { date: rel, used: 'manual-relative' };
+
+  return { date: null, used: null };
+}
+
+// manual fallback for simple "in X minutes/hours/days" if chrono fails
+function parseManualRelative(s) {
+  const m = s.match(/in\s+(\d+)\s*(seconds|second|secs|sec|minutes|minute|mins|min|hours|hour|hrs|hr|days|day)/i);
+  if (!m) return null;
+  const val = parseInt(m[1],10);
+  const unit = m[2].toLowerCase();
+  const d = new Date();
+  if (unit.startsWith('sec')) d.setSeconds(d.getSeconds() + val);
+  else if (unit.startsWith('min')) d.setMinutes(d.getMinutes() + val);
+  else if (unit.startsWith('hour') || unit.startsWith('hr')) d.setHours(d.getHours() + val);
+  else if (unit.startsWith('day')) d.setDate(d.getDate() + val);
+  return d;
+}
+
+// produce Discord format strings (unix seconds)
+function discordFormatsFromDate(date) {
+  const unix = Math.floor(date.getTime() / 1000);
+  return {
+    "Default": `<t:${unix}>`,
+    "Short Time (t)": `<t:${unix}:t>`,
+    "Long Time (T)": `<t:${unix}:T>`,
+    "Short Date (d)": `<t:${unix}:d>`,
+    "Long Date (D)": `<t:${unix}:D>`,
+    "Short Date/Time (f)": `<t:${unix}:f>`,
+    "Long Date/Time (F)": `<t:${unix}:F>`,
+    "Relative (R)": `<t:${unix}:R>`,
+    unix
+  };
+}
+
+// produce a human-readable preview using user's locale + timezone
+function humanPreview(date, formatKey) {
+  // For date/time formats we can pick dateStyle/timeStyle
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+    let opts = {};
+    if (formatKey === 'Short Time (t)') opts = { timeStyle: 'short' };
+    else if (formatKey === 'Long Time (T)') opts = { timeStyle: 'long' };
+    else if (formatKey === 'Short Date (d)') opts = { dateStyle: 'short' };
+    else if (formatKey === 'Long Date (D)') opts = { dateStyle: 'long' };
+    else if (formatKey === 'Short Date/Time (f)') opts = { dateStyle: 'medium', timeStyle: 'short' };
+    else if (formatKey === 'Long Date/Time (F)') opts = { dateStyle: 'full', timeStyle: 'short' };
+    else opts = { dateStyle: 'medium', timeStyle: 'short' };
+
+    return new Intl.DateTimeFormat(undefined, Object.assign({ timeZone: tz }, opts)).format(date);
+  } catch (e) {
+    return date.toString();
+  }
+}
+
+// relative preview for R
+function relativePreview(date) {
+  const diffSec = Math.round((date.getTime() - Date.now()) / 1000);
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+
+  const abs = Math.abs(diffSec);
+  if (abs < 60) return rtf.format(Math.round(diffSec), "second");
+  if (abs < 3600) return rtf.format(Math.round(diffSec/60), "minute");
+  if (abs < 86400) return rtf.format(Math.round(diffSec/3600), "hour");
+  if (abs < 604800) return rtf.format(Math.round(diffSec/86400), "day");
+  if (abs < 2629800) return rtf.format(Math.round(diffSec/604800), "week");
+  if (abs < 31557600) return rtf.format(Math.round(diffSec/2629800), "month");
+  return rtf.format(Math.round(diffSec/31557600), "year");
+}
+
+// render results to DOM
+function renderResults(date, used) {
+  const container = document.getElementById('results');
+  container.innerHTML = ''; // clear
+  const header = document.createElement('div');
+  header.className = 'muted note';
+  header.textContent = `Parsed (${used}) — your timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone || 'local'}`;
+  container.appendChild(header);
+
+  const all = discordFormatsFromDate(date);
+  const order = ["Default","Short Time (t)","Long Time (T)","Short Date (d)","Long Date (D)","Short Date/Time (f)","Long Date/Time (F)","Relative (R)"];
+
+  order.forEach(key => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const left = document.createElement('div');
+    left.className = 'left';
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.textContent = all[key] || all[key.replace(/\s*\(.*\)/,'')]; // fallback
+    const preview = document.createElement('div');
+    preview.className = 'preview';
+
+    if (key.startsWith('Relative')) {
+      preview.textContent = relativePreview(date);
+    } else {
+      preview.textContent = humanPreview(date, key);
+    }
+
+    left.appendChild(tag);
+    left.appendChild(preview);
+
+    const copy = document.createElement('button');
+    copy.className = 'copy';
+    copy.textContent = 'Copy';
+    copy.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(tag.textContent);
+        copy.classList.add('copied');
+        copy.textContent = 'Copied!';
+        setTimeout(()=>{ copy.classList.remove('copied'); copy.textContent = 'Copy'; }, 1600);
+      } catch (e) {
+        copy.textContent = 'Err';
+        setTimeout(()=> copy.textContent = 'Copy', 1200);
+      }
+    };
+
+    row.appendChild(left);
+    row.appendChild(copy);
+    container.appendChild(row);
+  });
+
+  // show raw unix too
+  const raw = document.createElement('div');
+  raw.className = 'muted note';
+  raw.style.marginTop = '6px';
+  raw.textContent = `Unix seconds: ${all.unix} — ISO (local): ${date.toLocaleString()}`;
+  container.appendChild(raw);
+}
+
+// glue: parse button + enter key
+const input = document.getElementById('input');
+const goBtn = document.getElementById('goBtn');
+const nowBtn = document.getElementById('nowBtn');
+
+async function convertInput() {
+  const text = input.value.trim();
+  if (!text) {
+    // show "now" option as default
+    renderResults(new Date(), 'now (default)');
+    return;
+  }
+
+  const { date, used } = parseToDate(text);
+  if (!date) {
+    const container = document.getElementById('results');
+    container.innerHTML = `<div class="muted note">Could not understand that input — try variations like "in 5 mins", "tomorrow 5pm", "next fri 3am", "2025-03-04 18:00", "+3h", or "now".</div>`;
+    return;
+  }
+
+  renderResults(date, used);
+}
+
+// Enter key
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    convertInput();
+  }
+});
+
+// click handlers
+goBtn.addEventListener('click', convertInput);
+nowBtn.addEventListener('click', () => {
+  input.value = 'now';
+  convertInput();
+});
+
+// small tilt effect (portfolio-like feel)
+const card = document.getElementById('card');
+card.addEventListener('mousemove', (ev) => {
+  const rect = card.getBoundingClientRect();
+  const cx = rect.left + rect.width/2;
+  const cy = rect.top + rect.height/2;
+  const dx = ev.clientX - cx;
+  const dy = ev.clientY - cy;
+  const px = dx / rect.width;
+  const py = dy / rect.height;
+  const rotY = px * 6;
+  const rotX = -py * 6;
+  card.style.transform = `perspective(900px) rotateY(${rotY}deg) rotateX(${rotX}deg)`;
+});
+card.addEventListener('mouseleave', () => card.style.transform = '');
+
+</script>
+</body>
+</html>
