@@ -1,9 +1,9 @@
 name: Fetch YouTube Stats
 
 on:
-  workflow_dispatch:   # Manual trigger
+  workflow_dispatch:
   schedule:
-    - cron: "*/10 * * * *"  # Every 10 minutes
+    - cron: "*/10 * * * *"
 
 jobs:
   fetch:
@@ -19,13 +19,12 @@ jobs:
         run: |
           echo "Fetching YouTube stats..."
           curl -s "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=UChOEvoKRbJBnSW1VRVB-HNQ&key=$YT_API_KEY" \
-            -o youtube.json
+            -o youtube/youtube.json
 
       - name: Commit youtube.json
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add youtube.json
+          git add youtube/youtube.json
           git diff --cached --quiet || git commit -m "Update YouTube stats"
           git push
-
