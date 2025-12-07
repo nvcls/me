@@ -1,0 +1,31 @@
+name: Fetch YouTube Data
+
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */4 * * *"  # updates every 4 hours
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Get YouTube Data
+        run: |
+          curl "https://www.googleapis.com/youtube/v3/channels?part=statistics&id=YOUR_CHANNEL_ID&key=$YT_API_KEY" \
+          -o youtube.json
+
+      - name: Move JSON to site folder
+        run: mv youtube.json ./youtube.json
+
+      - name: Commit files
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add youtube.json
+          git commit -m "Update YouTube data" || echo "No changes"
+          git push
+    env:
+      YT_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
