@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Stats Portal</title>
+<style>
+:root {
+  --glass: rgba(255,255,255,0.06);
+  --glass-strong: rgba(255,255,255,0.12);
+  --accent: rgba(130,180,255,0.12);
+  --text: #111;
+  --muted: rgba(17,17,17,0.7);
+  --radius: 22px;
+  --card-w: 420px;
+}
+
+/* Reset + font */
+* { box-sizing:border-box; margin:0; padding:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+
+body {
+  background: radial-gradient(circle at 20% 10%, #ffffff, #f0f0f0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  color: var(--text);
+}
+
+/* Card */
+.card {
+  width: var(--card-w);
+  max-width: 96vw;
+  padding: 28px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+  box-shadow: 0 10px 40px rgba(0,0,0,0.08), 0 0 40px rgba(60,130,255,0.04) inset;
+  backdrop-filter: blur(12px) saturate(120%);
+  transform-style: preserve-3d;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+  position: relative;
+  overflow: visible;
+}
+
+/* Glow */
+.glow {
+  position: absolute;
+  inset: -40px;
+  border-radius: 30px;
+  filter: blur(30px);
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(130,180,255,0.08), transparent 40%);
+}
+
+/* Titles */
+h1 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: 0.4px;
+}
+
+#sub {
+  font-size: 0.86rem;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+/* Stats list */
+.stats {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transform: translateZ(40px);
+  transition: transform 220ms cubic-bezier(.2,.8,.2,1);
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+  border: 1px solid rgba(0,0,0,0.05);
+  font-family: monospace;
+}
+
+.stat-row span {
+  font-weight: 600;
+}
+
+.stat-row small {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Card hover 3D */
+.card::before {
+  content:"";
+  position:absolute;
+  left:-30%;
+  top:-30%;
+  width:160%;
+  height:160%;
+  pointer-events:none;
+  background: radial-gradient(600px 300px at var(--mx,50%) var(--my,50%), rgba(255,255,255,0.02), transparent 12%);
+  border-radius:30px;
+  transition: background-position 220ms linear;
+}
+
+@media (max-width:520px) {
+  .card { padding:20px; border-radius:18px; }
+}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div class="glow"></div>
+  <h1>YouTube Stats Portal</h1>
+  <div id="sub">Live stats for Nordicalls</div>
+
+  <div class="stats" id="stats">
+    <div class="stat-row"><span>Subscribers</span><small id="subs">–</small></div>
+    <div class="stat-row"><span>Total Views</span><small id="views">–</small></div>
+    <div class="stat-row"><span>Uploads</span><small id="videos">–</small></div>
+  </div>
+
+  <div id="updated" style="margin-top:12px; font-size:0.8rem; color:var(--muted)">Loading…</div>
+</div>
+
+<script>
+// Animate numbers smoothly
+function animateNumber(el, newValue) {
+  const old = parseInt(el.innerText.replace(/,/g,"")) || 0;
+  const duration = 500;
+  const start = performance.now();
+  function frame(time) {
+    const progress = Math.min((time-start)/duration,1);
+    const value = Math.floor(old + (newValue-old)*progress);
+    el.innerText = value.toLocaleString();
+    if(progress<1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// Load YouTube JSON
+async function loadStats() {
+  try {
+    const res = await fetch('youtube.json?v=' + Date.now());
+    const data = await res.json();
+    const stats = data.items[0].statistics;
+    const snippet = data.items[0].snippet;
+
+    document.getElementById("subs").innerText = stats.subscriberCount;
+    document.getElementById("views").innerText = stats.viewCount;
+    document.getElementById("videos").innerText = stats.videoCount;
+    document.getElementById("updated").innerText = "Updated: " + new Date().toLocaleTimeString();
+  } catch(e) {
+    console.error(e);
+    document.getElementById("updated").innerText = "Failed to load stats.";
+  }
+}
+
+loadStats();
+setInterval(loadStats, 15000);
+
+// 3D hover effect
+const card = document.getElementById('card');
+card.addEventListener('mousemove', ev => {
+  const rect = card.getBoundingClientRect();
+  const dx = (ev.clientX - rect.left - rect.width/2)/rect.width;
+  const dy = (ev.clientY - rect.top - rect.height/2)/rect.height;
+  card.style.transform = `perspective(900px) rotateY(${dx*10}deg) rotateX(${-dy*10}deg)`;
+  card.style.setProperty('--mx', ((ev.clientX - rect.left)/rect.width)*100 + '%');
+  card.style.setProperty('--my', ((ev.clientY - rect.top)/rect.height)*100 + '%');
+});
+card.addEventListener('mouseleave', () => { card.style.transform = ''; });
+</script>
+</body>
+</html>
