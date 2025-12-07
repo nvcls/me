@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>nvcls — Profile Viewer</title>
+  <style>
+    :root{ --bg:#f3f4f6; --fg:#0b1220; --card:#fff; --muted:#6b7280; --accent:#5865f2 }
+    .dark{ --bg:#0f1113; --fg:#fff; --card:#202225; --muted:#9aa3b2; --accent:#58a6ff }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--fg);padding:20px;display:flex;flex-direction:column;align-items:center}
+    .top{width:100%;max-width:1100px;display:flex;justify-content:space-between;gap:12px;margin-bottom:16px}
+    .brand{font-weight:800;letter-spacing:-0.5px}
+    .controls{width:100%;max-width:1100px;display:grid;grid-template-columns:360px 1fr;gap:18px}
+    .panel{background:var(--card);padding:14px;border-radius:12px;border:1px solid rgba(0,0,0,0.04)}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input[type=text],textarea,select{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.08);font-size:14px;background:transparent;color:var(--fg)}
+    textarea{min-height:76px}
+    .row{display:flex;gap:8px;align-items:center}
+    .btn{padding:8px 10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:transparent;cursor:pointer}
+    .btn.primary{background:var(--accent);color:white;border:none}
+    .drop{padding:10px;border-radius:8px;border:1px dashed rgba(0,0,0,0.06);text-align:center;cursor:pointer}
+    .preview-wrap{display:flex;justify-content:center}
+    .card{width:100%;max-width:740px;border-radius:12px;overflow:hidden;background:var(--card);box-shadow:0 12px 30px rgba(2,6,23,0.18)}
+    .banner{position:relative;height:150px;background:#111}
+    .banner img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%}
+    .avatar{position:relative;width:120px;height:120px;border-radius:50%;overflow:hidden;border:6px solid var(--card);background:linear-gradient(180deg,#777,#555);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;box-shadow:0 8px 20px rgba(2,6,23,0.3)}
+    .avatar img{width:100%;height:100%;object-fit:cover;object-position:50% 50%;display:block}
+    .user-row{display:flex;align-items:flex-end;padding:14px 16px 20px;gap:12px}
+    h1{margin:0;font-size:22px}
+    .discr{color:var(--muted);font-weight:600}
+    .bio{color:var(--muted);margin-top:8px;padding:0 16px 20px;white-space:pre-wrap}
+    .meta{display:flex;gap:10px;color:var(--muted);font-size:13px;padding:0 16px 18px}
+    .small{font-size:13px;color:var(--muted)}
+    .advanced{margin-top:12px;border-top:1px dashed rgba(0,0,0,0.05);padding-top:12px}
+    .preset-list{display:flex;gap:8px;flex-wrap:wrap}
+    @media (max-width:980px){.controls{grid-template-columns:1fr}.top{flex-direction:column;align-items:flex-start}}
+  </style>
+</head>
+<body class="dark">
+  <div class="top">
+    <div class="brand">nvcls — profile previewer</div>
+    <div style="display:flex;gap:8px">
+      <button id="themeBtn" class="btn">Toggle theme</button>
+      <button id="importBtn" class="btn">Import JSON</button>
+      <button id="loadPresetBtn" class="btn">Load Preset</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="panel" id="panelLeft">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:700">Controls</div>
+          <div class="small">Live preview, export & presets</div>
+        </div>
+        <div class="small">v1.1</div>
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Username</label>
+        <input id="username" type="text" placeholder="cool.user" value="track.ed">
+      </div>
+
+      <div style="margin-top:10px">
+        <label>Discriminator</label>
+        <input id="discr" type="text" maxlength="5" value="#0420">
+      </div>
+
+      <div style="margin-top:10px">
+        <label>Bio</label>
+        <textarea id="bio" maxlength="190">Hey!</textarea>
+        <div style="display:flex;justify-content:space-between;margin-top:6px"><div class="small">Supports line breaks.</div><div id="bioCount" class="small">0 / 190</div></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Avatar (click or drop)</label>
+        <div id="avatarDrop" class="drop">Choose / Drop avatar</div>
+        <input id="avatarInput" type="file" accept="image/*" style="display:none">
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Banner (click or drop)</label>
+        <div id="bannerDrop" class="drop">Choose / Drop banner</div>
+        <input id="bannerInput" type="file" accept="image/*" style="display:none">
+      </div>
+
+      <div class="advanced">
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="exportPng" class="btn primary">Export PNG</button>
+          <button id="exportSvg" class="btn">Export SVG</button>
+          <button id="exportJson" class="btn">Export JSON</button>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <label style="min-width:110px">PNG DPI</label>
+          <select id="dpiSelect"><option value="1">1x</option><option value="2" selected>2x</option><option value="3">3x</option></select>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <input type="checkbox" id="transparentBg"><label for="transparentBg">Transparent background</label>
+        </div>
+
+        <div style="margin-top:10px">
+          <label>Avatar scale</label>
+          <input id="avatarZoom" type="range" min="0.6" max="1.5" step="0.01" value="1" />
+        </div>
+
+        <div style="margin-top:10px">
+          <label>Banner vertical position</label>
+          <input id="bannerPos" type="range" min="0" max="100" value="50" />
+        </div>
+
+        <div style="margin-top:12px">
+          <div style="display:flex;gap:8px;align-items:center;justify-content:space-between">
+            <div>
+              <input id="presetName" placeholder="Preset name" style="padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)" />
+            </div>
+            <div style="display:flex;gap:8px">
+              <button id="savePreset" class="btn">Save</button>
+              <button id="clearPreset" class="btn">Clear presets</button>
+            </div>
+          </div>
+          <div class="preset-list" id="presetList" style="margin-top:8px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="preview-wrap">
+        <div class="card" id="profileCard">
+          <div class="banner" id="bannerArea"><img id="bannerImg" alt="banner" /></div>
+          <div style="display:flex;align-items:flex-start">
+            <div style="margin: -56px 18px 0 18px">
+              <div class="avatar" id="avatarArea"><img id="avatarImg" alt="avatar" style="display:none"/><div id="avatarInitials">TR</div></div>
+            </div>
+            <div style="flex:1">
+              <div class="user-row">
+                <div style="display:flex;flex-direction:column">
+                  <div style="display:flex;gap:8px;align-items:center"><h1 id="displayName">track.ed</h1><div class="discr" id="displayDiscr">#0420</div></div>
+                  <div class="bio" id="displayBio">Hey!</div>
+                </div>
+              </div>
+              <div class="meta"><div>Joined <strong>Today</strong></div><div>•</div><div class="small">@server</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <a id="download" style="display:none"></a>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous"></script>
+  <script>
+    // helpers
+    const $ = id => document.getElementById(id);
+    const username = $('username'); const discr = $('discr'); const bio = $('bio'); const bioCount = $('bioCount');
+    const bannerInput = $('bannerInput'); const bannerImg = $('bannerImg'); const bannerArea = $('bannerArea'); const bannerDrop = $('bannerDrop');
+    const avatarInput = $('avatarInput'); const avatarImg = $('avatarImg'); const avatarArea = $('avatarArea'); const avatarDrop = $('avatarDrop'); const avatarInitials = $('avatarInitials');
+    const displayName = $('displayName'); const displayDiscr = $('displayDiscr'); const displayBio = $('displayBio'); const profileCard = $('profileCard');
+    const exportPng = $('exportPng'); const exportSvg = $('exportSvg'); const exportJson = $('exportJson'); const dpiSelect = $('dpiSelect'); const transparentBg = $('transparentBg');
+    const avatarZoom = $('avatarZoom'); const bannerPos = $('bannerPos');
+    const themeBtn = $('themeBtn'); const importBtn = $('importBtn');
+    const savePresetBtn = $('savePreset'); const presetName = $('presetName'); const presetList = $('presetList'); const clearPreset = $('clearPreset'); const loadPresetBtn = $('loadPresetBtn');
+    const download = $('download');
+
+    const MAX_BIO = 190;
+
+    // state
+    function updateAll(){
+      displayName.textContent = username.value || 'username';
+      displayDiscr.textContent = discr.value || '#0000';
+      displayBio.textContent = bio.value || '';
+      bioCount.textContent = (bio.value.length) + ' / ' + MAX_BIO;
+      // initials
+      const parts = (username.value||'').split(new RegExp('[^A-Za-z0-9]+')).filter(Boolean);
+      let initials = parts.length? (parts.length===1? parts[0].slice(0,2) : (parts[0][0]+(parts[1]?[parts[1][0]]:''))): '';
+      avatarInitials.textContent = (initials||'TR').toUpperCase();
+      // avatar zoom
+      avatarImg.style.transform = `scale(${avatarZoom.value})`;
+      // banner pos
+      bannerImg.style.objectPosition = `50% ${bannerPos.value}%`;
+      saveLastState();
+    }
+
+    username.addEventListener('input', updateAll);
+    discr.addEventListener('input', updateAll);
+    bio.addEventListener('input', ()=>{ if(bio.value.length>MAX_BIO) bio.value=bio.value.substring(0,MAX_BIO); updateAll(); });
+    avatarZoom.addEventListener('input', updateAll); bannerPos.addEventListener('input', updateAll);
+
+    // drag & drop helpers
+    function readFileAsDataURL(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
+
+    // avatar handling
+    avatarDrop.addEventListener('click', ()=> avatarInput.click());
+    avatarDrop.addEventListener('drop', async (e)=>{ e.preventDefault(); const f=e.dataTransfer.files[0]; if(f) await setAvatarFromFile(f); avatarDrop.style.border='1px dashed rgba(0,0,0,0.06)'; });
+    avatarDrop.addEventListener('dragover', e=>{ e.preventDefault(); avatarDrop.style.borderColor='var(--accent)'; });
+    avatarDrop.addEventListener('dragleave', e=>{ avatarDrop.style.border='1px dashed rgba(0,0,0,0.06)'; });
+    avatarInput.addEventListener('change', async e=>{ const f=e.target.files[0]; if(f) await setAvatarFromFile(f); });
+    async function setAvatarFromFile(file){ const url = await readFileAsDataURL(file); avatarImg.src = url; avatarImg.style.display='block'; avatarInitials.style.display='none'; updateAll(); }
+
+    // banner handling
+    bannerDrop.addEventListener('click', ()=> bannerInput.click());
+    bannerDrop.addEventListener('drop', async (e)=>{ e.preventDefault(); const f=e.dataTransfer.files[0]; if(f) await setBannerFromFile(f); bannerDrop.style.border='1px dashed rgba(0,0,0,0.06)'; });
+    bannerDrop.addEventListener('dragover', e=>{ e.preventDefault(); bannerDrop.style.borderColor='var(--accent)'; });
+    bannerDrop.addEventListener('dragleave', e=>{ bannerDrop.style.border='1px dashed rgba(0,0,0,0.06)'; });
+    bannerInput.addEventListener('change', async e=>{ const f=e.target.files[0]; if(f) await setBannerFromFile(f); });
+    async function setBannerFromFile(file){ const url = await readFileAsDataURL(file); bannerImg.src = url; bannerImg.style.display='block'; updateAll(); }
+
+    // theme
+    themeBtn.addEventListener('click', ()=>{ document.body.classList.toggle('dark'); });
+
+    // export PNG using html2canvas with options
+    exportPng.addEventListener('click', async ()=>{
+      const scale = parseFloat(dpiSelect.value)||2;
+      const oldBg = profileCard.style.backgroundColor;
+      if(transparentBg.checked) profileCard.style.backgroundColor = 'transparent';
+      try{
+        const canvas = await html2canvas(profileCard,{backgroundColor: null, scale});
+        canvas.toBlob(blob=>{ const url = URL.createObjectURL(blob); download.href=url; download.download='profile.png'; download.click(); setTimeout(()=>URL.revokeObjectURL(url),2000); });
+      }catch(e){ alert('PNG export failed'); console.error(e); }
+      profileCard.style.backgroundColor = oldBg;
+    });
+
+    // export SVG (foreignObject fallback)
+    exportSvg.addEventListener('click', ()=>{
+      const rect = profileCard.getBoundingClientRect();
+      const clone = profileCard.cloneNode(true);
+      // hide controls, not necessary here
+      const wrapper = document.createElement('div'); wrapper.appendChild(clone);
+      const html = wrapper.innerHTML;
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${Math.round(rect.width)}' height='${Math.round(rect.height)}'><foreignObject width='100%' height='100%'><div xmlns='http://www.w3.org/1999/xhtml' style='font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;font-size:14px;'>${html}</div></foreignObject></svg>`;
+      const blob = new Blob([svg],{type:'image/svg+xml;charset=utf-8'});
+      const url = URL.createObjectURL(blob); download.href=url; download.download='profile.svg'; download.click(); setTimeout(()=>URL.revokeObjectURL(url),2000);
+    });
+
+    // export JSON
+    exportJson.addEventListener('click', ()=>{ const state = getState(); const blob = new Blob([JSON.stringify(state, null, 2)],{type:'application/json'}); const url = URL.createObjectURL(blob); download.href=url; download.download='profile.json'; download.click(); setTimeout(()=>URL.revokeObjectURL(url),2000); });
+
+    // import JSON
+    importBtn.addEventListener('click', ()=>{
+      const input = document.createElement('input'); input.type='file'; input.accept='application/json'; input.onchange = async e=>{
+        const f = e.target.files[0]; if(!f) return; try{ const txt = await f.text(); const j = JSON.parse(txt); applyState(j); alert('Imported'); }catch(err){ alert('Invalid JSON'); }
+      }; input.click();
+    });
+
+    // presets
+    function getState(){ return { username:username.value, discr:discr.value, bio:bio.value, avatar: avatarImg.src||'', banner: bannerImg.src||'', avatarZoom: avatarZoom.value, bannerPos: bannerPos.value, theme: document.body.classList.contains('dark')?'dark':'light' } }
+    function applyState(s){ if(!s) return; username.value = s.username||''; discr.value = s.discr||''; bio.value = s.bio||''; if(s.avatar) { avatarImg.src = s.avatar; avatarImg.style.display='block'; avatarInitials.style.display='none'; } if(s.banner) { bannerImg.src = s.banner; bannerImg.style.display='block'; } avatarZoom.value = s.avatarZoom||1; bannerPos.value = s.bannerPos||50; if(s.theme==='dark') document.body.classList.add('dark'); else document.body.classList.remove('dark'); updateAll(); }
+
+    function saveLastState(){ localStorage.setItem('profile_preview:last', JSON.stringify(getState())); }
+    function loadLastState(){ const raw = localStorage.getItem('profile_preview:last'); if(raw) try{ applyState(JSON.parse(raw)); }catch{} }
+
+    // presets storage
+    function loadPresets(){ try{ return JSON.parse(localStorage.getItem('profile_preview:presets')||'{}'); }catch{return {}} }
+    function savePresets(p){ localStorage.setItem('profile_preview:presets', JSON.stringify(p)); renderPresetList(); }
+    function renderPresetList(){ const p = loadPresets(); presetList.innerHTML=''; Object.keys(p).forEach(k=>{ const btn=document.createElement('button'); btn.className='btn'; btn.textContent=k; btn.onclick=()=>applyState(p[k]); const del = document.createElement('button'); del.className='btn'; del.textContent='✕'; del.onclick = (e)=>{ e.stopPropagation(); delete p[k]; savePresets(p); }; const wrap = document.createElement('div'); wrap.style.display='inline-flex'; wrap.style.gap='6px'; wrap.style.marginRight='6px'; wrap.appendChild(btn); wrap.appendChild(del); presetList.appendChild(wrap); }) }
+
+    savePresetBtn.addEventListener('click', ()=>{ const name = (presetName.value||new Date().toISOString()).trim(); if(!name) return; const p = loadPresets(); p[name] = getState(); savePresets(p); presetName.value=''; });
+    clearPreset.addEventListener('click', ()=>{ if(confirm('Clear all presets?')){ localStorage.removeItem('profile_preview:presets'); renderPresetList(); } });
+    loadPresetBtn.addEventListener('click', ()=>{ renderPresetList(); alert('Presets listed below. Click a preset to apply it.'); });
+
+    // utility to set avatar/banner from remote (when importing JSON with data URLs or links)
+    async function setImageFromUrl(imgEl, url){ if(!url) return; try{ imgEl.src = url; imgEl.style.display='block'; }catch(e){ console.warn('Could not set image URL',e); } }
+
+    // initial
+    loadLastState(); renderPresetList(); updateAll();
+
+    // expose some functions for debugging
+    window.__pp = { getState, applyState };
+  </script>
+</body>
+</html>
